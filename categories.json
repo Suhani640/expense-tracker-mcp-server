@@ -1,0 +1,30 @@
+{
+    "Food": [
+        "Groceries",
+        "Restaurant",
+        "Snacks"
+    ],
+    "Transport": [
+        "Cab",
+        "Fuel",
+        "Public Transport"
+    ],
+    "Shopping": [
+        "Clothes",
+        "Electronics",
+        "Other"
+    ],
+    "Bills": [
+        "Electricity",
+        "Internet",
+        "Mobile Recharge"
+    ],
+    "Entertainment": [
+        "Movies",
+        "Games",
+        "Subscriptions"
+    ],
+    "Other": [
+        "Miscellaneous"
+    ]
+}
