@@ -66,6 +66,36 @@ def add_expense(
         "id": expense_id
     }
 
+@mcp.tool()
+def delete_expense(expense_id: int) -> dict:
+    """Delete an expense by its ID."""
+
+    with psycopg.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                DELETE FROM expenses
+                WHERE id = %s
+                RETURNING id
+                """,
+                (expense_id,)
+            )
+
+            deleted = cursor.fetchone()
+
+        conn.commit()
+
+    if deleted is None:
+        return {
+            "status": "error",
+            "message": f"No expense found with ID {expense_id}"
+        }
+
+    return {
+        "status": "ok",
+        "deleted_id": deleted[0]
+    }
+
 
 @mcp.tool()
 def list_expenses(
