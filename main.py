@@ -18,7 +18,7 @@ AUTHKIT_DOMAIN = os.getenv(
 
 # This will be changed to your Render URL after deployment
 BASE_URL = os.getenv(
-    "BASE_URL",
+    "RENDER_EXTERNAL_URL",
     "http://localhost:8000"
 )
 
