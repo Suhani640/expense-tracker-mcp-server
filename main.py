@@ -1,37 +1,26 @@
 from fastmcp import FastMCP
 import os
-import sqlite3
 import json
+import psycopg
+from dotenv import load_dotenv
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "expenses.db")
+load_dotenv()
 
-CATEGORIES_PATH = os.path.join(os.path.dirname(__file__), "categories.json")
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+CATEGORIES_PATH = os.path.join(
+    os.path.dirname(__file__),
+    "categories.json"
+)
 
 mcp = FastMCP("ExpenseTracker")
+
 
 def load_categories():
     with open(CATEGORIES_PATH, "r") as file:
         return json.load(file)
     
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
 
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS expenses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT NOT NULL,
-            amount REAL NOT NULL,
-            category TEXT NOT NULL,
-            subcategory TEXT,
-            note TEXT
-        )
-    """)
-
-    conn.commit()
-    conn.close()
-init_db()
 
 
 @mcp.tool()
@@ -44,20 +33,26 @@ def add_expense(
 ) -> dict:
     """Add a new expense entry to the database."""
 
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO expenses
-            (date, amount, category, subcategory, note)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (date, amount, category, subcategory, note)
-        )
+    with psycopg.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO expenses
+                (date, amount, category, subcategory, note)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (date, amount, category, subcategory, note)
+            )
 
-        return {
-            "status": "ok",
-            "id": cursor.lastrowid
-        }
+            expense_id = cursor.fetchone()[0]
+
+        conn.commit()
+
+    return {
+        "status": "ok",
+        "id": expense_id
+    }
 
 
 @mcp.tool()
@@ -67,23 +62,26 @@ def list_expenses(
 ) -> list:
     """List expense entries within an inclusive date range."""
 
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.execute(
-            """
-            SELECT id, date, amount, category, subcategory, note
-            FROM expenses
-            WHERE date BETWEEN ? AND ?
-            ORDER BY id ASC
-            """,
-            (start_date, end_date)
-        )
+    with psycopg.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, date, amount, category, subcategory, note
+                FROM expenses
+                WHERE date BETWEEN %s AND %s
+                ORDER BY id ASC
+                """,
+                (start_date, end_date)
+            )
 
-        columns = [column[0] for column in cursor.description]
+            rows = cursor.fetchall()
 
-        return [
-            dict(zip(columns, row))
-            for row in cursor.fetchall()
-        ]
+            columns = [column.name for column in cursor.description]
+
+            return [
+                dict(zip(columns, row))
+                for row in rows
+            ]
 
 @mcp.tool()
 def summarize(
@@ -93,29 +91,33 @@ def summarize(
 ) -> list:
     """Summarize expenses by category within an inclusive date range."""
 
-    with sqlite3.connect(DB_PATH) as conn:
-        query = """
-            SELECT category, SUM(amount) AS total_amount
-            FROM expenses
-            WHERE date BETWEEN ? AND ?
-        """
+    with psycopg.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cursor:
 
-        params = [start_date, end_date]
+            query = """
+                SELECT category, SUM(amount) AS total_amount
+                FROM expenses
+                WHERE date BETWEEN %s AND %s
+            """
 
-        if category:
-            query += " AND category = ?"
-            params.append(category)
+            params = [start_date, end_date]
 
-        query += " GROUP BY category ORDER BY category ASC"
+            if category:
+                query += " AND category = %s"
+                params.append(category)
 
-        cursor = conn.execute(query, params)
+            query += " GROUP BY category ORDER BY category ASC"
 
-        columns = [column[0] for column in cursor.description]
+            cursor.execute(query, params)
 
-        return [
-            dict(zip(columns, row))
-            for row in cursor.fetchall()
-        ]
+            rows = cursor.fetchall()
+
+            columns = [column.name for column in cursor.description]
+
+            return [
+                dict(zip(columns, row))
+                for row in rows
+            ]
 
 @mcp.resource("expense://categories", mime_type="application/json")
 def categories():
@@ -126,4 +128,8 @@ def categories():
 
 
 if __name__ == "__main__":
-    mcp.run(transport="http", host="127.0.0.1", port=8000)
+   mcp.run(
+    transport="http",
+    host="0.0.0.0",
+    port=int(os.environ.get("PORT", 8000))
+)
