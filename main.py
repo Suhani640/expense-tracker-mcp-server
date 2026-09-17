@@ -96,6 +96,48 @@ def delete_expense(expense_id: int) -> dict:
         "deleted_id": deleted[0]
     }
 
+@mcp.tool()
+def edit_expense(
+    expense_id: int,
+    date: str,
+    amount: float,
+    category: str,
+    subcategory: str = "",
+    note: str = ""
+) -> dict:
+    """Edit an existing expense by its ID."""
+
+    with psycopg.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE expenses
+                SET date = %s,
+                    amount = %s,
+                    category = %s,
+                    subcategory = %s,
+                    note = %s
+                WHERE id = %s
+                RETURNING id
+                """,
+                (date, amount, category, subcategory, note, expense_id)
+            )
+
+            updated = cursor.fetchone()
+
+        conn.commit()
+
+    if updated is None:
+        return {
+            "status": "error",
+            "message": f"No expense found with ID {expense_id}"
+        }
+
+    return {
+        "status": "ok",
+        "updated_id": updated[0]
+    }
+
 
 @mcp.tool()
 def list_expenses(
