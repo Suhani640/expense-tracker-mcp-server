@@ -1,4 +1,5 @@
 from fastmcp import FastMCP
+from fastmcp.server.auth.providers.workos import AuthKitProvider
 import os
 import json
 import psycopg
@@ -6,21 +7,32 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-CATEGORIES_PATH = os.path.join(
-    os.path.dirname(__file__),
-    "categories.json"
+# WorkOS AuthKit configuration
+AUTHKIT_DOMAIN = os.getenv(
+    "WORKOS_AUTHKIT_DOMAIN",
+    "https://accurate-citadel-38-staging.authkit.app"
 )
 
-mcp = FastMCP("ExpenseTracker")
+# This will be changed to your Render URL after deployment
+BASE_URL = os.getenv(
+    "BASE_URL",
+    "http://localhost:8000"
+)
 
+# WorkOS authentication
+auth_provider = AuthKitProvider(
+    authkit_domain=AUTHKIT_DOMAIN,
+    base_url=BASE_URL
+)
 
-def load_categories():
-    with open(CATEGORIES_PATH, "r") as file:
-        return json.load(file)
-    
-
+# MCP server
+mcp = FastMCP(
+    name="ExpenseTracker",
+    auth=auth_provider
+)
 
 
 @mcp.tool()
@@ -83,6 +95,7 @@ def list_expenses(
                 for row in rows
             ]
 
+
 @mcp.tool()
 def summarize(
     start_date: str,
@@ -119,17 +132,26 @@ def summarize(
                 for row in rows
             ]
 
-@mcp.resource("expense://categories", mime_type="application/json")
+
+@mcp.resource(
+    "expense://categories",
+    mime_type="application/json"
+)
 def categories():
     """Return the expense categories."""
-    
-    with open(CATEGORIES_PATH, "r", encoding="utf-8") as file:
+
+    categories_path = os.path.join(
+        os.path.dirname(__file__),
+        "categories.json"
+    )
+
+    with open(categories_path, "r", encoding="utf-8") as file:
         return file.read()
 
 
 if __name__ == "__main__":
-   mcp.run(
-    transport="http",
-    host="0.0.0.0",
-    port=int(os.environ.get("PORT", 8000))
-)
+    mcp.run(
+        transport="http",
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 8000))
+    )
